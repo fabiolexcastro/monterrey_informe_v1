@@ -1,0 +1,961 @@
+---
+title: "Informe ambiental - Monterrey (Casanare)"
+subtitle: "Agrosolidaria Monterrey - Casanare" 
+author: 
+  - Con el apoyo de Center for International Migration and Development CIM
+  - Elaborado por Erika Arias y Fabio Castro - Sobre ellos
+  
+output: 
+  html_document:
+    toc: true
+    theme: united
+    toc_depth: 3
+    highlight: tango
+---
+
+Datos de contacto: 
+
+direccionfederacion@agrosolidaria.org / fabio.castro@coreounivalle.edu.co
+
+- [Sitio web Agrosolidaria](https://www.agrosolidaria.org/)
+- [Sitio web Fabio Castro](https://www.geofabio.com/)
+
+```{r, echo = FALSE, out.width = '10%'}
+library(htmltools)
+htmltools::img(src = 'G:/Proyectos/politica_ambiental/png/logo/logo3.png', 
+               alt = 'logo', 
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+```
+
+```{r setup, include=FALSE}
+require(pacman)
+pacman::p_load(raster, rgdal, rgeos, ggnewscale, hrbrthemes, kableExtra, stringr, sf, tidyverse, fs, colorspace, foreign, cowplot, ggspatial, kableExtra, readxl)
+options(knitr.kable.NA = '')
+vrds <- shapefile('../shp/base/veredas_ok.shp')
+```
+
+## Introducción 
+
+Monterrey hace parte de los 19 municipios que tiene el departamento de Casanare,limita al norte con Paéz (Boyacá) y Tauramena (Casanare), al sur con Tauramena y Villanueva (Casanare), al oriente con Tauramena y al occidente con Sabanalarga (Casanare). Su área es de aproximadamente 75.900 hectáreas.
+
+Para introducir los usos y cambios de suelo a nivel regional, se efectuó un análisis preliminar del producto ofrecido por The Europian Space Agency (ESA) World cover a una resolución de 10m de las imagenes satélitales de Sentinel 1 y Sentinel 2. Se efectuó una mascara para el departamento de Casanare y posteriormente para llevar el análisis al contexto local, se hizo el mismo ejercicio para el municipio de Monterrey. Los siguientes mapas visualizan el estado de intervención del territorio. Si bien, Monterrey representa tan solo el 1.7% del área total del departamento, por su posición geográfica, en términos de producción hidríca, las alteraciones ecológicas, especialmente la perdida de bosque en las zonas montañosas, repercuten en un desequilibrio del balance hidrológico regional.
+
+```{r map_esa, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/maps/ESA map.png")
+```
+
+```{r map_esa_monterrey, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/maps/ESA map monterrey.png")
+```
+
+Se deriva entonces, datos representativos. De acuerdo con ESA, en el área total del departamento de Casanare, aproximadamente el 22% es cobertura Boscosa. El aporte municipal de Monterrey en términos de bosque esta representado por un 3% del total departamental. Este 3% corresponde a la zona de piedemonte productora de agua para Casanare. Esta es la ecorregión de Bosques subandinos los cuales son estratégicos porque es donde se hace la mayor recarga para la red hídrica del afluente del río Meta, el cual aporta más del 70% del caudal que este río entrega al Orinoco (WFF Colombia, 2016).
+
+```{r tbl_esa_mnt, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+esa.csn <- read.dbf('../tif/esa/esa_v2.tif.vat.dbf') %>% mutate(type = iconv(type, from = 'UTF-8', to = 'latin1'))
+esa.mnt <- read.dbf('../tif/esa/esa_v2_monterrey.tif.vat.dbf') %>% mutate(type = iconv(type, from = 'UTF-8', to = 'latin1'))
+colnames(esa.csn) <- c('value_csn', 'count_csn', 'prc_csn', 'type_csn')
+colnames(esa.mnt) <- c('value_mnt', 'count_mnt', 'prc_mnt', 'type_mnt')
+esa.mnt <- inner_join(esa.mnt, esa.csn[,c('value_csn', 'count_csn')], by = c('value_mnt' = 'value_csn'))
+esa.mnt <- mutate(esa.mnt, prc_ttl = count_mnt / count_csn * 100, prc_ttl = round(prc_ttl, digits = 2))
+esa.tbl <- dplyr::select(esa.mnt, Cobertura = type_mnt, Porcentaje_Municipio = prc_mnt, Porcentaje_Departamento = prc_ttl)
+esa.tbl <- mutate(esa.tbl, Porcentaje_Municipio = round(Porcentaje_Municipio, 3), Porcentaje_Departamento = round(Porcentaje_Departamento, 3))
+esa.tbl %>%
+  dplyr::select(1, 3) %>% 
+  setNames(c('Cobertura', '% area respecto al departamento')) %>% 
+  kbl() %>%
+  kable_paper("hover", full_width = F)
+```
+El municipio presenta dos climas diferenciadores, por un lado en estribaciones de la cordillera oriental presenta un clima medio y muy húmedo comprendido entre las altitudes de 1000 a 2000 msnm. En mayor proporción del gradiente geográfico del municipio se encuentra el clima cálido y húmedo propio de altitudes menores a 1000 msnm. 
+
+De acuerdo con la evolución geológica y física el municipio cuenta con tres unidades de paisaje en un gradiente comprendido entre los 188 a 2409 m.s.n.m., siendo estas Montaña, piedemonte y sabana. El municipio a la fecha no reporta actos administrativos para áreas protegidas, distritos de manejo integrado, parques municipales, parques nacionales naturales, reserva forestal natural protectora, reserva municipal, reservas naturales de la sociedad civil, reservas naturales y/o patrimonio ecológico ni reserva forestal hidrogeográfica.
+
+```{r intro, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 6.5, fig.height = 10, fig.cap = "", out.width = '100%', fig.align = 'center'}
+wrld <- st_read('../shp/base/all_countries.shp', quiet = TRUE) %>% filter(CONTINENT %in% c('South America', 'North America'))
+dpts <- st_read('../shp/base/dptos_ok.shp', quiet = TRUE)
+mpio <- st_read('D:/data/IGAC/MGN2018_MPIO_POLITICO/MGN_MPIO_POLITICO.shp', quiet = TRUE)
+mntr.limt <- filter(mpio, MPIO_CNMBR == 'MONTERREY')
+mntr.limt <- as(mntr.limt, 'Spatial')
+vrds <- st_read('../shp/base/veredas_ok.shp', quiet = TRUE)
+csnr.limt <- dpts %>% filter(NOMBRE_DPT == 'CASANARE') %>% as(., 'Spatial')
+
+# Hillshade
+srt1 <- raster::getData(name = 'SRTM', lon = -72.8, lat = 4.9)
+srt1 <- raster::crop(srt1, mntr.limt) %>% raster::mask(., mntr.limt)
+srt2 <- raster::getData(name = 'SRTM', lon = -72.8, lat = 6)
+srt2 <- raster::crop(srt2, mntr.limt) %>% raster::mask(., mntr.limt)
+srtm <- raster::mosaic(srt1, srt2, fun = 'mean')
+
+# Get the aspect and slope
+slpe <- raster::terrain(x = srtm, opt = 'slope')
+aspc <- raster::terrain(x = srtm, opt = 'aspect')
+hlls <- raster::hillShade(slope = slpe, aspect = aspc)
+
+hlls.tble <- rasterToPoints(x = hlls, spatial = FALSE) %>% as_tibble()
+srtm.tble <- rasterToPoints(x = srtm, spatial = FALSE) %>% as_tibble()
+
+g1 <- ggplot() +
+  geom_sf(data = mpio %>% filter(DPTO_CNMBR %in% c('BOYACÁ', 'CASANARE') & MPIO_CNMBR != 'MONTERREY'), fill = 'white') + 
+  geom_sf(data = vrds, fill = 'white') + 
+  geom_tile(data = srtm.tble, aes(x = x, y = y, fill = layer), alpha = 0.75) + 
+  # scale_fill_continuous_sequential(palette = 'OrRd') +
+  scale_fill_gradientn(colors = terrain.colors(n = 15), name = 'Altitud (m.s.n.m)') +
+  new_scale_fill() +
+  geom_tile(data = hlls.tble, aes(x = x, y = y, fill = layer), alpha = 0.5) +
+  scale_fill_gradientn(colors = RColorBrewer::brewer.pal(n = 8, name = 'Greys'), guide = 'none',
+                       name = 'Altitud (m.s.n.m)') +
+  theme_bw() +
+  theme(panel.grid = element_blank(), 
+        legend.position = 'bottom', 
+        legend.key.width = unit(2.1, 'line')) +
+  coord_sf(xlim = c(-73, -72.6), ylim = c(4.6, 5.2)) + 
+  labs(x = '', y = '', fill = 'Altitud (m.s.n.m.)') + 
+  geom_sf_text(data = vrds, aes(label = str_to_sentence(NOMBRE_VER)), size = 3)
+  
+csnr <- mpio %>% filter(DPTO_CNMBR == 'CASANARE')
+mntr <- mpio %>% filter(MPIO_CNMBR == 'MONTERREY')
+mntr_prjc <- st_transform(x = mntr, crs = st_crs(3116))
+area_mntr <- as.numeric(st_area(mntr_prjc)) / 10000
+
+g2 <- ggplot() + 
+  geom_sf(data = dpts, fill = NA) + 
+  geom_sf(data = csnr, fill = NA) + 
+  geom_sf(data = mntr, fill = 'darkred', col = 'darkred') +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) + 
+  coord_sf(xlim = extent(csnr)[1:2], ylim = extent(csnr)[3:4]) + 
+  labs()
+
+g3 <- ggplot() + 
+  geom_sf(data = wrld, fill = NA) +
+  geom_sf(data = dpts, fill = NA) + 
+  geom_sf(data = dpts %>% filter(NOMBRE_DPT == 'CASANARE'), fill = 'darkred', col = 'darkred') + 
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) + 
+  coord_sf(xlim = extent(dpts)[1:2], ylim = extent(dpts)[3:4]) + 
+  labs()
+
+g4 <- ggdraw() + 
+  draw_plot(g1) + 
+  draw_plot(g2, x = 0.66, y = 0.58, width = 0.3, height = 0.2) + 
+  draw_plot(g3, x = 0.66, y = 0.748, width = 0.3, height = 0.2) 
+
+g4
+
+```
+
+## Bosques 
+
+En la presente sección se evalúa el estado de la cobertura boscosa de Monterrey - Casanare, esto a partir de información satelital proveniente de Landsat y procesado por la Universidad de Maryland (Estados Unidos), el análisis conlleva el conteo del área boscosa inicial para el año 2000 y temporalmente se visualiza y calcula cómo se ha venido perdiendo / ganando esta cobertura boscosa hasta el año 2020. Esta metodología podría ser extrapolada a cualquier zona del mundo, entre tanto, se tiene disponibilidad para todos los países. 
+
+El insumo empleado de acceso gratuito ([Global Forest Change](https://earthenginepartners.appspot.com/science-2013-global-forest)) con una resolución aproximada de 0.00027 segundos de arco (~30 mt)  en formato espacial (tiff) se validó usando las capas de bosque / no bosque de la metodología diseñada por el IDEAM. Este análisis fue diseñado en su totalidad con el lenguaje de programación de R (las librerías utilizadas fueron `raster`, `rgdal`, `rgeos`, `stringr`, `sf`, `tidyverse`, `terra`, `fs`, `glue`), y usando la IDE RStudio. 
+
+Los pasos grosso modo fueron los siguientes: 
+
+- Corte para el municipio de Monterrey de la información espacial del [IDEAM](http://www.siac.gov.co/catalogo-de-mapas) referente a bosque / no bosque, esto para el año 2000. Este mismo paso fue replicado con la información espacial de Global Forest Change, previamente se hizo la descarga de la ventana (*tile*) 10N - 80W.  
+
+La capa de cobertura boscosa del IDEAM contiene tres distintas categorías dentro de un mismo archivo espacial raster: 
+
+- Bosque.
+- No bosque.
+- Sin información.
+
+Por su parte para los datos de cobertura boscosa de Global Forest Change se tienen dos distintas capas
+
+1. *Treecover*, contiene valores de 0 a 100, indicando el porcentaje del área boscosa de cada píxel. 
+2. *Loss*, contiene dentro de cada valor de píxel el año en el que hubo posible pérdida del área boscosa. 
+
+Con el fin de evitar las zonas "Sin información" del IDEAM (estas dadas por el problema del Bandeado de Landsat 7), se utilizó la información de Global Forest Change, y para poder identificar la línea base de bosque
+
+Mientras que los datos de Global Forest Change contiene distintas categorías
+
+1. Extracción de los valores que toma el raster de *treecover* para las zonas de bosque del IDEAM 
+
+```{r hist_rfrs, echo = FALSE, fig.cap = "", out.width = '60%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/graphs/histograma_bosque_hansen.png")
+```
+
+2. Binarización del raster de *treecover* para el año 2000 (línea base)
+
+```{r frst,  warning=FALSE, parse=TRUE, include = FALSE, echo = FALSE, cache = TRUE, eval = TRUE, message=FALSE}
+vrd_prj <- spTransform(x = as(vrds, 'Spatial'), CRSobj = '+proj=tmerc +lat_0=4.59620041666667 +lon_0=-74.0775079166667 +k=1 +x_0=1000000
++y_0=1000000 +ellps=GRS80 +units=m +no_defs')
+frs_nfr <- raster('../tif/forest/hansen/forest_noforest.tif')
+frs_nfr_tbl <- as_tibble(rasterToPoints(frs_nfr))
+colnames(frs_nfr_tbl) <- c('x', 'y', 'value')
+frs_nfr_tbl <- mutate(frs_nfr_tbl, type = ifelse(value == 1, 'Bosque', 'No bosque'))
+frs_nfr_tbl <- mutate(frs_nfr_tbl, type = factor(type, levels = c('Bosque', 'No bosque')))
+
+# frs_nfr_tbl %>% group_by(type) %>% summarise(count = n()) %>% ungroup() %>% mutate(prc = count / sum(count) * 100)
+
+g_frs <- ggplot() +
+  geom_tile(data = frs_nfr_tbl, aes(x = x, y = y, fill = type)) + 
+  scale_fill_manual(values = c('#0B610B', '#D8D8D8')) +
+  geom_sf(data = st_as_sf(vrd_prj), fill = NA) + 
+  theme_ipsum_es() + 
+  theme(legend.position = 'bottom', 
+        axis.text.x = element_text(size = 7), 
+        axis.text.y = element_text(size = 7), 
+        legend.text = element_text(size = 9)) + 
+  labs(x = 'Longitud', y = 'Latitud', fill = '') +
+  annotation_scale(style = "bar", location = "br") + 
+  annotation_north_arrow(location = "tl", which_north = "true", style = north_arrow_fancy_orienteering()) 
+```
+
+Producto de este paso se tiene el siguiente mapa que ilustra las zonas de bosque (color verde) y las zonas de no bosque (en color gris) para el año 2000.
+
+```{r plot_rfrs, fig.align = 'center', fig.width = 9.6, fig.height = 6.7, echo = FALSE, warning = FALSE, message = FALSE}
+g_frs
+```
+
+3. Conteo de los píxeles en los cuales hubo pérdida de cobertura boscosa, haciendo uso de la capa *loss*
+
+```{r hist_frsyr, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '60%', fig.align = 'center'}
+lss <- read_csv('../tbl/forest/Perdida_bosque_anual.csv')
+lss.smm <- lss %>% group_by(year) %>% summarise(has = sum(has)) %>% ungroup()
+g_lss <- ggplot(data = lss.smm, aes(x = year, y = has)) + 
+  geom_line() + 
+  theme_ipsum_es() + 
+  theme() + 
+  labs(x = 'Año', y = 'Hectáreas')
+g_lss
+```
+
+4. Cálculo de la pérdida de cobertura boscosa por unidad político administrativa a nivel de vereda 2000 - 2019, en el siguiente gráfico se presentan estos datos.
+
+```{r hist_frsyr_vrda, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '90%', fig.align = 'center'}
+lss_vrd <- lss %>% group_by(vereda) %>% summarise(has = sum(has)) %>% ungroup() %>% mutate(vereda = iconv(vereda, to = 'latin1')) %>% mutate(vereda = str_to_title(vereda))
+lss_vrd <- lss_vrd %>% arrange(desc(has)) %>% mutate(vereda = factor(vereda, levels = vereda))
+g_vrd <- ggplot(data = lss_vrd, aes(x = vereda, y = has)) + 
+  geom_col() + 
+  theme(panel.grid = element_blank(), 
+        axis.text.x = element_text(size = 10, angle = 90, vjust = 0.3)) + 
+  labs(x = '', y = 'Hectáreas deforestadas') 
+g_vrd
+```
+
+5. Generación de salidas gráficas / mapas
+
+De acuerdo a los análisis de cobertura boscosa en el municipio de Monterrey, se encontró que entre el período 2000-2019 se estima una pérdida de bosque de aprox 500 ha en 20 años. De acuerdo a los mapas presentados, es posible derivar dos procesos de alta importancia a nivel espacial. La primera es la visualización de zonas de importancia de protección ambiental por el estado de conservación y, la segunda corresponde a evidenciar aquellas veredas que requieren construir corredores de conectividad debido a la fragilidad de los remanentes de bosque.
+
+```{r map_frs_ch1, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/maps/bosque_nobosque_2000_2019.png")
+```
+
+La fragmentación del bosque es diferenciada geoespacialmente. En terminos veredales, de las 21 veredas que componen el municipio de Monterrey, tan solo dos presentan cobertura boscosa mayor al 50% (Guayabal y Piñalera), seguida de Guadualito con porcentaje de bosque del 25% y las 18 restantes presentan coberturas de interés ecológico inferiores al 20%, llegando a valores críticos de hasta presencias menores al 5% en la vereda La Vigía.
+
+```{r map_frs_ch2, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/graphs/Cobertura Boscosa.png")
+```
+
+En general, durante el período evaluado la degradación y perdida de bosque en el municipio esta asociado a picos de deforestación para la primera decena entre 2000 a 2019. Para éste, la vereda Palmira reporta el  pico más alto de perdida de bosque, para inicios del período con 80 ha/año de deforestación. En menor proporción se encuentran las veredas Caño Rico y Tacuya con áreas cercanas a las 40 ha/año de pérdida de bosque y el restante con cifras iguales o inferiores a 25 ha año.
+
+Para la segunda decena del período evaluado, la deforestación decrece y permanece constante con valores cercanos a 1 ha/año de deforestación, incluso en algunas veredas como Marenao, La Vigia y Guaneyes se registran valores de no deforestación. 
+
+```{r map_frs_ch3, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/graphs/Perdida bosque.png")
+```
+
+## Puntos de calor
+
+Mediante el uso de dos productos disponibles proporcionados por MODIS Collection 6.1 temporal coverage y VIIRS S-NPP (acceso libre en https://firms.modaps.eosdis.nasa.gov/download/) ,  producidas para el período de 19 años registrados durante de 1 de Noviembre de 2000 al 31 de Dic de 2019. Se  agrego la información de las dos capas disponibles para el municipio de Monterrey Casanare y se produjo el conteo asociado a puntos de calor en el terriotio, derivando análisis veredales. Aquí se hizo uso de la librería `raster`, `sf`, y `tidyverse`. 
+
+En la siguiente figura se ilustra la ubicación de los incendios ocurridos en el territorio de Monterrey. A la izquierda los registrados por el sensor MODIS y a la derecha los puntos de calor registrados por el sensor VIIRS.
+
+```{r map_fire_v1, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/maps/nasa_firms.png")
+```
+
+El análisis de conteos de puntos de calor muestra una diferenciación geográfica de los posibles incendios registrados en los 19 años estudiados para las 21 veredas, siendo la vereda Palmira quien reporta un conteo de 44 focos de calor en el terriotrio. seguida de Iguaro con 37 focos de calor, Brisas del Llano con 28 puntos de calor, Bella Vista con 24 puntos, Caño Rico con 23 y Tacuya con 20 puntos de calor. 
+
+En menor proporción, pero aún con registros de posibles incendios se encuentran las veredas Palo Negro, Barbasco, Garrabal, la Piñalera y Guayabal con incidencias menores a 16 puntos de calor a nivel municipal. 
+
+```{r map_fire_v2, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/maps/puntos_calor_vereda_v2.png")
+```
+
+Las dinámicas de frecuencia de deforestación se pueden explicar en el gráfico participación de puntos de calor que estiman deforestación. La metodología consiste en recrear zonas buffer de 365 metros alrededor de cada foco de calor y que posiblemente fueron afectadas por los incendios ocasionados. Una vez estimadas estas áreas se produce un conteo de los píxeles que fueron afectados en el período de análisis. Entre mayor cercanía geográfica están los puntos de calor, mayor frecuencia de conteo.
+
+Siendo así, se obtuvo que las diez veredas que registran mayores frecuencias de deforestación son Palmira > 25% de estimación de deforestación, Iguaro y Brisas del Llano con porcentajes cercanos al 20% e inferiores a este valor Palo Negro, Barbasco, Tacuya, Caño Rico, Garrabal, Piñalera y Guayabal. Nótese que esta frecuencia no esta asociada directamente a los puntos de calor, sino a los píxeles cercanos que son asociados a la deforestación producida por los focos de incendio. 
+
+```{r map_fire_v3, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/graphs/top10_puntoscalor_deforestation.png")
+```
+
+También fue posible caracterizar la incidencia de los puntos de calor a nivel temporal, tal como se muestra en el gráfico Cantidad de puntos de calor-mes. Para el período evaluado se encuentran un total de 264 focos calientes que se presentaron en su gran mayoría durante la estación de verano o tiempo de baja intensidad de lluvias, siendo el mes de Marzo el que presenta 100 puntos de calor seguidos de los meses de febrero y enero. 
+
+Este fenómeno está estrechamente relacionado con el proceso cultural que se lleva a cabo en la región denominado roza, tumba y quema para expansión de la frontera agrícola. Los meses que menos registran puntos de calor son Junio y Julio explicados por los picos altos de pluviosidad que se registran en estos meses. No se evidencia mes que no tenga al menos un registro de punto de calor en el territorio. 
+
+
+```{r map_fire_v4, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/graphs/Puntos de calor por mes.png")
+```
+
+### Ecosistemas con posible afectación por puntos de calor
+
+En un posterior análisis nos permitió identificar aquellos ecosistemas que han sido modificados por la presencia de zonas de actividad de incendios. De acuerdo a la capa mapa de ecosistemas continentales y costeros de Colombia v. 2.1 escala 1:100.000 del año 2017 generada por el IDEAM y el cruce con los puntos de calor del período en estudio, se obtuvo que cerca del 50% de los incendios han ocurrido en Agroecosistemas, seguido por intervenciones menores al 20% por ecosistemas transicionales o transformados y Bosques. Aunque en menor proporción (<10%), se registran incendios en las rondas hidráulicas de ríos, vegetación secundaria, sabanas, bosque fragmentado y herbazal. 
+
+```{r map_lnds_v1, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/graphs/ecosistemas_hotspots.png")
+```
+
+Las dinámicas son heterogéneas en el gradiente municipal. Por ejemplo, Se evidencia que para la vereda con mayor registro de incendios, La Palmira hay focos donde existen las categorías de uso adecuado o sin conflicto y subutilización del suelo. Sin embargo, si nos movemos a la vereda Tacuya y Bella Vista, los puntos de calor están asociados en mayor proporción a Sobreutilización del suelo. Es importante destacar, que la zona Norte del municipio corresponde a la zona de recarga hídrica, la cual tiene uno de los servicios ecológicos principales dentro del municipio. Esta zona presenta un mosaico de puntos que varían desde la sobreutilización hasta el uso adecuado del suelo. 
+
+```{r map_lnds_v2, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/maps/conflicto_uso_hotspot.png")
+```
+
+## Ecología del paisaje - Métricas del paisaje
+
+Para el cálculo de ecología del paisaje y las métricas del paisaje se hizo uso de las librerias: `raster`, `rgdal`, `rgeos`, `tidyverse` y quizá la más importante es [`landscapemetrics`](https://cran.r-project.org/web/packages/landscapemetrics/landscapemetrics.pdf), esta última librería se utilizó para el cálculo de las métricas del paisaje, tanto para las zonas de bosque como para las coberturas del paisaje que componen el municipio de Monterrey. La fuente de las capas de cobertura de la tierra son del [IDEAM](http://www.ideam.gov.co/web/ecosistemas/coberturas-nacionales), descargadas desde su portal web para los años 2000, 2005, 2010 y 2018. 
+
+Se hicieron uso de 18 métricas del paisaje para analizar los patrones de distribución del paisaje en Monterrey con características de zona rural con asentamientos urbanos dispersos. Es decir, el análisis del paisaje se efectuó para determinar el grado de alteración antrópica dentro del territorio. 
+Las métricas del paisaje utilizadas se pueden caracterizar en dos grandes grupos, por clase y por parche. La clase refiere a los tipos de ecosistemas presentes en el área administrativa municipal y los de parche corresponde a las características que presentan los grupos de parche dentro de cada clase presente.
+
+En la siguiente tabla se ilustra el listado de las métricas realizadas.
+```{r tbl_cvr, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+cvr <- read_excel('../tbl/cobertura/tbl_covers_v2.xlsx')
+cvr %>%
+  kbl() %>%
+  kable_paper()
+```
+En la siguiente figura se ilustran las distintas coberturas para los años mencionados anteriormente.
+
+
+```{r map_cver_v1, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/png/maps/cover/cover_all_v2.jpg")
+```
+
+
+### Índice de agregación
+En unidades porcentuales muestra para los cuatro años estudiados y las 12 clases de cobertura de suelo analizadas valores cercanos a 100%, en consecuencia, en el mosaico geográfico se puede decir que las clases están altamente agregadas.
+
+```{r grp_lsc_v1, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/Aggregation index_v2.png")
+```
+
+### Área media del parche
+En unidades de hectáreas, esta métrica indica cuáles son las clases de mayor presencia dentro del municipio. Para los años 2000, 2005 y 2010 la mayor representación estaba dada por el mosaico de espacios naturales y cultivos, sin embargo, el año 2015 muestra una fuerte disminución de esta cobertura y alcanza valores mayores la cobertura boscosa, bosque ripario y herbazal.  
+
+Cabe destacar, que para el año 2018, la entidad cultivos fue diferenciada a mayor especificidad en la capa del IDEAM y por esto, también sugiere que la clase de mosaicos naturales y cultivos esta desagregada. 
+Es importante destacar una clase importante en términos agrícolas, los pastos también presentan una disminución en el 2018 respecto a los años predecesores, y aparecen nuevas clases en mayor proporción: cultivos, herbazales y piscícolas. 
+
+```{r grp_lsc_v2, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/avg_patch_v2.png")
+```
+
+### Índice de aglomeración (métrica de agregación)
+Este índice sin unidades, permite estimar que tan agregados están los parches dentro del paisaje. La gráfica muestra que en general todas las clases tienen un comportamiento cercano a 1 lo que indica que las clases dentro del paisaje tienden a estar agregadas. Si fuesen valores cercanos a -1, el paisaje sería altamente desagregado y si estuviesen cercanos a 0 esto indicaría una conformación de clases aleatoria dentro del paisaje. 
+
+```{r grp_lsc_v3, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/Clumpy index_v2.png")
+```
+
+### Porcentaje de área central del paisaje
+
+Esta medida expresada en porcentaje, indica que las clases de vegetación secundaria, bosque denso y ripario, tejido urbano, plantaciones forestales, suelo desnudo, ríos, herbazales, cultivos y piscícolas están distribuidos de manera simple dentro del paisaje. Parches pequeños representados por valores porcentuales inferiores a 10%, mientras que pastos y mosaicos naturales con pastos y cultivos con valores superiores al 35% y 15% respectivamente y a lo largo de la serie de tiempo del análisis, son más grandes en términos de forma dentro del paisaje. 
+
+```{r grp_lsc_v4, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/cpland_v2.png")
+```
+
+### Coeficiente de variación del área del parche
+
+Unidad que representa métrica tanto de área como borde del parche, expresado en hectáreas, indica que existe una alta variación de tamaño de todos los parches que conforman las 12 clases del mosaico del paisaje a excepción del suelo desnudo y las plantaciones forestales. Las clases que presentan picos más altos de variación en comparación con los años evaluados entre una misma clase, son heterogéneas. Esto indica, por ejemplo, para el caso de los ríos que las zonas de aluvión han variado en tamaño y forma para el año 2018 respectos a los años predecesores. Otro hallazgo similar es la clase herbazal, que por las dinámicas de intervención varia respecto a la serie de tiempo trabajada. Los bosques presentan una variación positiva, ya que incrementan las hectáreas positivamente para el final de la serie, es decir, para el año 2018.
+## Cambio climático
+
+```{r grp_lsc_v5, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "", out.width = '100%', fig.align = 'center'}
+knitr::include_graphics("G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/cv_patch_v2.png")
+```
+
+### Coeficiente de variación de la distancia euclidiana al vecino más cercano (métrica de agregación)
+<br>
+Este coeficiente expresado en metros pero para facilidad de gráfico lo simplificamos a unidades en kilómetros, muestra la distancia que puede existir de un parche a su vecino de la misma clase en el paisaje analizado.  En general para la serie de tiempo, las distancias entre parches cercanos son inferiores a 1 km, pero para el año 2018 las distancias entre parches de la misma clase se distancian más, llegando a valores de 4 km. La clase de cobertura denominada tejido urbano, muestra que para inicios del período de estudio los parches se encontraban más distantes entre sí; en 2018 esta distancia euclidiana se disminuye, lo cual puede ser explicado por una dinámica de urbanización más acelerada.
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/Euclidean neartes patch_v2.png' width='800px' alt=''></center>
+
+### Índice de parche más grande (métrica de área y borde)
+<br>
+Sin lugar a dudas esta medida porcentual es una de las métricas más importantes para describir el paisaje. Nos permite saber que comportamiento porcentual ha sufrido cada cobertura del suelo a lo largo del tiempo. Los pastos muestran menor fragmentación y por lo tanto, parches más grandes dentro de la unidad de paisaje, sin embargo, para el año final de estudio 2018 presenta una disminución mayor a tres puntos porcentuales. 
+
+Las dinámicas agrícolas asociadas con cultivos son heterogéneas, disminuyen al inicio del período, luego hay un momento constante y posteriormente incrementan al finalizar 2018. Esto indica que hay parches pequeños y discontinuos dentro del paisaje. En términos negativos, no se evidencia recuperación de bosque denso al final de la serie de tiempo, pero si un ligero incremento para las zonas de ronda hidráulica. 
+
+En general no hay una marcada tendencia de dominancia de las clases dentro de la unidad de paisaje, pero los parches que tienden a ser cada vez más pequeños son las plantaciones y los suelos desnudos. No hay evidencia de contrastante para la clase piscicola ya que solo aparece para la capa del año 2018.
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/Largest patch index_v2.png' width='800px' alt=''></center>
+
+### Densidad del área central disjunta (métrica del área central)
+<br>
+Métrica expresada en Número de parches por cada 100 hectáreas, derivadas del área central de cada parche. Para la serie de tiempo en general, los parches se comportan de una manera más compleja o fragmentada y dispersa dentro de la unidad de paisaje. Casos particulares que pueden ser descritos son los pastos, bosque ripario, ríos y herbazales que para el año 2018 tienden a comportarse más grandes respecto a los otros años comparativos. 
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/Disjunct core area density_v2.png' width='800px' alt=''></center>
+
+### Porcentaje de adyacencias similares (métrica de agregación)
+<br>
+En unidades porcentuales es importante destacar que las 12 clases muestran que los píxeles de cada parche están acompañados de parches similares, es decir, están agregados ya que los valores tienden a ser cercanos a 100%. Sin embargo, desde el 2010 la mayoría de las clases disminuyen la forma de agregación, indicando mayor intervención dentro de las coberturas del suelo. 
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/percentaje of like adjacencies.png' width='800px' alt=''></center>
+
+### Dimensión fractal de área perimetral (métrica de forma)
+<br>
+Métrica adimensional que varía entre 1 y 2 que indica la forma de los parches en términos de la unidad de paisaje. Para la serie de tiempo, lo que se puede interpretar es que el mosaico de parches fluctúa entre formas de parches simples, es decir, valores cercanos a 1 y, en menor proporción a formas complejas que es el comportamiento natural de los ríos. 
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/fractal_v2.png' width='800px' alt=''></center>
+
+### Borde total (clase) (métrica de área y borde)
+
+Es una medida expresada en metros que muestra para toda la serie de tiempo y las 12 coberturas valores mayores a 1 y sin límite, indicando que el paisaje en general esta fragmentado. 
+<br>
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/te_v2.png' width='800px' alt=''></center>
+
+### Área del parche 
+<br>
+En hectáreas la métrica muestra las áreas de parche por clases presentes en la serie de estudio. Puede incrementar sin limite de acuerdo al tamaño de los parches. Para el paisaje del municipio de Monterrey, durante los primeros tres años evaluados el mosaico de espacios naturales, pastos y cultivos predomina con parches que alcanzan hasta las 350 ha, sin embargo, al finalizar el período decrece considerablemente hasta alcanzar tamaños de parche de hasta 150 ha. Lo que destaca este cambio es la variación de la clase en mención por la clase herbazales, que suponen zonas de descanso de pastos e inician los procesos de sucesión secundaria.
+Una ventaja a lo largo del tiempo, es que se denota una ligera recuperación de área de bosque denso y ripario en este mosaico que se encuentra altamente intervenido y fragmentado. Por ejemplo, para el bosque denso la media de área de parche esta sobre 50 ha y la de bosque ripario cada se fragmenta más ya que inicialmente se observaba medias que alcanzaban las 70 ha y al finalizar el período evaluado se registran parches menores a 50 ha. 
+En términos agrícolas, la clase pastos tiende a mostrar parches de menor tamaño, incluso con medias menores a los 5 ha, cuando para el año 2000 la media de área podría ser de hasta 30 ha. Estas dinámicas han ido cambiando por tres fenómenos diferentes, la construcción de un tejido urbano más denso, la aparición de cultivos que pueden presentar picos extremos mayores a 150 ha y para el final de período de estudio, la aparición de piscícolas con áreas de intervención superiores a la 50 ha. 
+<br>
+<br>
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/area_patch_v2.png' width='800px' alt=''></center>
+<br>
+
+### Índice de continuidad
+<br>
+Este índice adimensional expresa valores cercanos a cero cuando los parches en el paisaje están conectados a parches de una categoría de clase específica. La gráfica indica que hay valores extremos cercanos a cero para el primer cuartil de la serie, especialmente para aquellas clases en el paisaje que son más predominantes, como pastos, bosques densos, bosques de galería, ríos y herbazales. Esto quiere decir, que hay un porcentaje relativamente alto en el paisaje (al menos 25%) para estas clases que no están conectadas.
+Para clases con parches de menor área, la conectividad del vecino es más elevada, es decir, es posible que para estas clases como mosaicos y tejidos urbanos haya una tendencia a expandirse o estar muy cercanos entre ellos. 
+<br>
+<br>
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/Contiguity index_v2.png' width='800px' alt=''></center>
+
+### Índice de dimensión fractal del coeficiente de variación (métrica de forma)
+<br>
+Siendo adimensional, esta métrica muestra la complejidad que puede presentar cada parche dentro de una misma clase, siendo el valor 0 la forma menos compleja dentro del paisaje. En general, la variación que presenta el grupo de parches seccionado por clases es superior a 1, e incrementa sin limite a valores extremos dentro del grupo de datos ligeramente. En general, todos los valores expresan una ligera complejidad dentro del paisaje de Monterrey, esto puede entenderse debido a la variación de tamaño del parche dentro de cada clase, pero variaciones provocadas por la intervención cultural de las coberturas del suelo.
+<br>
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/fractal_v2.png' width='800px' alt=''></center>
+
+### Relación perímetro-área (forma métrica)
+<br>
+Esta métrica describe la forma del parche, buscando identificar la complejidad de las formas presentes en el paisaje. Lo que se obtiene en el gráfico es el cambio del radio directamente relacionado con el tamaño del parche e independiente de su forma. En general los valores incluso extremos de los años evaluados sugieren formas poco complejas que varían entre 0.001 y 0.15.
+<br>
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/Perimeter - Area ratio_v2.png' width='800px' alt=''></center>
+<br>
+
+### Radio de giro (área y borde métrico)
+<br>
+En general, para el histórico de años y clases analizadas, el radio de giro muestra que a pesar de tener dentro del mosaico áreas de parche grandes, no necesariamente indica que están compactados ya que las unidades de la métrica superan grandemente los valores a 0. Si los parches dentro del paisaje lo estuvieran, la métrica sería cercana a 0 metros. 
+<br>
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/gyrate_v2.png' width='800px' alt=''></center>
+<br>
+
+### Índice de forma (métrica de forma)
+<br>
+La descripción del índice adimensional indica la descripción del radio entre el actual perímetro del parche y el perímetro mínimo hipotético. Así, para valores equivalentes a 1, presentes en siete de las doce clases presentes en toda la serie de tiempo, las formas de parche tienden a ser cuadradas. Sin embargo, cuando se evalúa el diagrama de caja, desde el segundo cuartil se puede identificar para todas las clases una tendencia dentro del conjunto de datos a ser cada vez más complejas las formas dentro del mosaico del paisaje. 
+<br>
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/shape_index_v2.png' width='800px' alt=''></center>
+<br>
+
+### Porcentaje de área central del paisaje
+<br>
+Esta medida expresada en porcentaje, indica que las clases de vegetación secundaria, bosque denso y ripario, tejido urbano, plantaciones forestales, suelo desnudo, ríos, herbazales, cultivos y piscícolas están distribuidos de manera simple dentro del paisaje. Parches pequeños representados por valores porcentuales inferiores a 10%, mientras que pastos y mosaicos naturales con pastos y cultivos con valores superiores al 35% y 15% respectivamente y a lo largo de la serie de tiempo del análisis, son más grandes en términos de forma dentro del paisaje. 
+
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/landscapemetrics/cpland_v2.png' width='800px' alt=''></center>
+<br>
+<!--- This is an HTML comment in Markdown -->
+
+## Análisis multivariado de las métricas del paisaje 
+
+Con la finalidad de sintetizar todas estas métricas del paisaje, se optó por aplicar un análisis de componentes principales para las distintas métricas, por un lado las de a nivel parche y las de a nivel de clase. 
+
+### A nivel de clase
+
+En la siguiente figura se ilustra el comportamiento de las métricas del paisaje para los distintos índices y horizontes de tiempo.
+<br>
+<br>
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/pca/pca_grp_class.jpg' width='1000px' alt=''></center>
+<br>
+<br>
+Tal como se ilustra en la anterior figura, el comportamiento de cada métrica para los distintos años es ligeramente similar, por ejemplo se indica que mientras el valor del perimetro fractal aumental el índice de algomeración disminuye, o en otras palabras, va en direción opuesta; de otro lado, existe cierta correlación en las clases, para todos los años, de borde total, porcentaje de clase del paisaje, porcentaje de área del núcleo, y  el índice del parche más largo van en la misma dirección. Otro aspecto a tener presente dentro de este análisis es que en todos los años se presenta una representación de más del 75% para las dos primeras componentes dentro del análisis del PCA.
+
+### A nivel de parche
+
+En la siguiente figura se ilustra el comportamiento de las métricas del paisaje para los distintos índices y horizontes de tiempo.
+<br>
+<br>
+<center><img src= 'G:/Proyectos/politica_ambiental/workspace/coberturas/png/graphs/pca/pca_grp_patch.jpg' width='1000px' alt=''></center>
+<br>
+<br>
+Tal como se ilustra en la anterior figura el comportamiento para estas métricas es relativamente similar en los distintos años, por ejemplo, las métricas de índice de dimensión fractal, índice de forma, y relación perimetro van en la misma dirección; de otro lado, se puede visualizar que mientras los datos del índice de contigüidad aumentan los datos de la relación perimetro disminuyen. De igual manera, similar a lo sucedido con el análisis PCA a nivel de clase, se tiene que las dos componentes en cada año representan más de tres terceras partes del comportamiento total de los datos. Al igual que con el análisis a nivel de clase, se tiene que para todos los años se tiene una representación de más del 75% de la variabilidad para todas las métricas del paisaje, este valor se visualiza en los ejes x & y de la anterior figura. 
+
+Por último, una característica del comportamiento de este PCA, es que la variable ***CV patch*** presenta poca contribución dentro de los cuatro periodos de tiempo, con lo cual se puede concluir que esta variable presenta poca importancia dentro del presente análisis, o lo que es lo mismo, no existe mayor variabilidad de esta métrica dentro de las distintas clases. 
+
+## Cambio climático
+
+Para el análisis del cambio climático se hizo uso de los datos del quinto informe del Panel Intergubernamental de Cambio Climático [IPCC](https://www.ipcc.ch/report/ar5/syr/), haciendo además uso de dos escenarios futuros del clima, como lo son el RCP 4.5 y el RCP 8.5, estos RCP son modelos que van en función de la cantidad de aumento del forzamiento radiactivo en watts por metro cuadrado. Los datos de línea base fueron tomados de la base de datos de Worldclim v2.0 [Hijmans et al., 2017](https://worldclim.org/data/worldclim21.html); ahora bien, los datos del futuro se descargaron del portal de CCAFS [ver aquí](http://www.ccafs-climate.org/data_spatial_downscaling/). Estos datos utilizados refieren a resolución de 30 arcos de segundo, es decir, aproximadamente 1 km2 en la línea del Ecuador. Como comentario adicional, se tienen que las variables climáticas utilizadas fueron la temperatura máxima (tmax), temperatura media (tmean), temperatura mínima (tmin), y precipitación (prec), con base en estas variables se estimó la evapotranspiración potencial, y con ello, el balance hídrico. 
+
+Siguiendo con la descripción de los datos, se tiene que los datos climáticos futuros referente a los RCP 4.5 y 8.5 están compuestos internamente por varios modelos, conocidos como GCM (Modelos de Circulación Generalizados), los cuales presentan distintas miradas del comportamiento del clima, siendo un total de 19 GCM. Todos estos datos fueron promediados (conocido como ensemble), y con esta media se hizo el cálculo de la diferencia entre el clima actual y el clima futuro. 
+
+Todo este análisis fue realizado dentro del lenguaje de programación de R, y con ayuda de las siguientes librerías: `raster`, `rgdal`, `rgeos`, `stringr`, `sf`, `tidyverse`, `terra`, `fs`, `glue`.
+<br>
+<br>
+
+<h4>Mapas de línea base y diferencias con el clima futuro para el municipio de Monterrey</h4>
+
+<br>
+De acuerdo a los resultados obtenidos, en este informe se representan los datos de precipitación, temperatura máxima, temperatura mínima y temperatura promedio para línea base y las diferencias obtenidas tras cruzar la información de los escenarios futuros. Estas diferencias expresan las variaciones visualizadas en mapas, para detallar espacialmente y temporalmente la probabilidad de ocurrencia de cambios de temperatura y precipitación tanto para el RCP 4.5 como para el RCP 8.5, años 2030, 2050 y 2080.
+El análisis de datos se aplicó para el Municipio de Monterrey Casanare considerando un escenario de ‘business as usual’ en el cual las actividades económicas, políticas y sociales actuales se mantienen en el tiempo sin modificar la tendencia de los usos del suelo, este es el caso del RCP 4.5. Pero otro escenario muy usado internacionalmente es el más dinámico respecto a la implementación de una economía basada en negocios emitiendo CO2 (fuentes fósiles y extracción minera) e intervención de los servicios ambientales a mayor velocidad, el cual es el caso del RCP 8.5.
+
+En la siguiente figura se ilustra el comportamiento de la precipitación para los datos de línea base, es decir, del periodo 1970 al año 2000.
+<br>
+<figure>
+  <center>
+    <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/prec/prec_baseline.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de precipitación mensual - Monterrey<figcaption>
+  </center>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/prec/rcp45_2080s_prec_diferencia.png' width='1000px' alt=''>
+      <figcaption>Fig - Mapa de diferencia entre la precipitación futura del RCP 4.5 al 2080 - Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/prec/rcp85_2080s_prec_diferencia.png' width='1000px' alt=''>
+      <figcaption>Fig - Mapa de diferencia entre la precipitación futura del RCP 8.5 al 2080 - Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+En el caso de la **pluviosidad**, en la línea base se registran valores picos de hasta 600 mm mes-1 durante los meses de Mayo, Junio y Julio y épocas de disminución de lluvias que pueden variar entre los 50 a 100 mm mes-1 (ver climogramas) durante los meses de Diciembre, Enero, Febrero y Marzo, denotando un sistema monomodal, un período de lluvias de 8 meses seguido de 4 meses de época seca. 
+Las diferencias asociadas a los tres períodos de estudio presentes en cada RCP, es decir, año 2030, 2050 y 2080 son ligeramente variadas. Por tal motivo, se decide mostrar el gráfico del final del período, es decir las diferencias entre la línea base y el año 2080. 
+
+La gráfica muestra que hay variaciones negativas o disminución de precipitación de hasta 50 mm durante los meses de Enero, Febrero y Marzo. En contraste, durante la estación de picos de lluvia, se observa que la intensidad de lluvias aumenta sobre todo en la zona de recarga hídrica del municipio, con hasta 400 mm, siendo esta la parte Noreste y de mayor altitud en el gradiente geográfico, y donde hay mayor ocurrencia de deslizamiento de tierra. Opuesto a lo que sucede en épocas de menor precipitación, donde los momentos geográficos más secos se presentan al centro y sur oriente del municipio.
+
+Tal como se ilustra en la anterior figura, los meses más secos van de noviembre a diciembre, mientras que los más húmedos, van de abril a septiembre; teniendo además presente que el rango de la precipitación va desde los 0 hasta los 550 mm aproximadamente; en adicción, los meses de agosto septiembre y octubre se presenta el caso que en la zona alta, al noroccidente, se presenta mayor sequía  que en la parte baja. 
+
+Para el caso de la temperatura, los análisis se efectuaron tanto para tres variables de **temperatura mínima**, media y máxima con sus correspondientes líneas base y los escenarios futuros de RCP4.5 y 8.5, igual que en el análisis de precipitación, se presentan los gráficos finales para la serie del año 2080. Ahora bien, en la siguiente figura, se ilustra el comportamiento de la temperatura mínima
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/tmin/tmin_baseline.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de temperatura mínima línea base - Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/tmin/rcp45_2080s_tmin_diferencia.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de temperatura mínima RCP 4.5 al periodo 2080s</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/tmin/rcp85_2080s_tmin_diferencia.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de temperatura mínima RCP 8.5 al periodo 2080s</figcaption>
+  </center>
+<figure>
+<br>
+
+**Temperatura mínima**: la línea base presenta una escala que varia entre 10 a 23°C, en la que las temperaturas más bajas se presentan en las altitudes más altas del municipio y el paisaje de lomerío que llega hasta los 500 msnm. Hay ocurrencia de menor temperatura durante los meses de septiembre-diciembre, cuando hay un fenómeno de nubes bajas en el gradiente. Las temperaturas mínimas son más estables durante los meses de precipitación, en la cual no hay gran variación a nivel mensual. Sin embargo, en época de baja pluviosidad se registran momentos más cálidos en el territorio del municipio. 
+Las diferencias registradas para el año 2080 en el RCP 4.5 varían entre 0.75 a 2°C pero para RCP 8.5 la temperatura se modifica entre 3.5°C a 5.5°C respecto a la línea base. Si bien estas variaciones tienden a situarse en la mediana de las escalas presentadas a lo largo del gradiente geográfico, los meses de mayor afectación se muestran en la época seca, repercutiendo en fenómenos de evapotranspiración más altos a nivel ecosistema.
+
+Ahora bien, en la siguiente figura, se ilustra el comportamiento de la temperatura media, para la línea base y datos futuros. 
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/tmea/tmean_baseline.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de temperatura media línea base - Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/tmea/rcp_45_2080s_tmean_diferencia.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de temperatura media RCP 4.5 al periodo 2080s</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/tmea/rcp_85_2080s_tmean_diferencia.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de temperatura media RCP 8.5 al periodo 2080s</figcaption>
+  </center>
+<figure>
+<br>
+
+**Temperatura media**: en términos generales a lo largo del año Monterrey presenta una línea base de temperatura que oscila entre los 15°C a 27°C. Una vez más las zonas más altas registran valores más bajos de temperatura y las zonas de valles y planicies los momentos más cálidos en términos de temperatura con la estacionalidad monomodal anteriormente mencionada.
+
+En comparación con los escenarios futuros, la temperatura media registra diferencias respecto a la línea base para el RCP 4.5 de 2 a 3,2°C y para el RCP 8.5 entre 4 a 5,5°C. Nótese que a medida que se desmejoran las prácticas de conservación y regulación de emisiones de CO2, las diferencias a nivel municipal se hacen más evidentes. 
+
+En este caso, las zonas geográficamente más calientes serán aquellas asociadas a la pérdida de bosque denso en la zona de recarga hídrica del municipio de Monterrey.
+
+Siguiendo con el análisis de temperatura, en las siguientes figuras se presenta la variable de temperatura máxima. 
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/tmax/tmax_baseline.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de temperatura máxima línea base - Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/tmax/rcp45_2080s_tmax_diferencia.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de temperatura máxima RCP 4.5 al periodo 2080s</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/tmax/rcp85_2080s_tmax_diferencia.png' width='1000px' alt=''>
+    <figcaption>Fig - Mapa de temperatura máxima RCP 8.5 al periodo 2080s</figcaption>
+  </center>
+<figure>
+<br>
+
+Temperatura máxima: la línea base registra un clima cálido para el municipio, característico de la zona tropical en la Orinoquia Colombiana donde se encuentra el municipio de Monterrey bajo la franja de piedemonte llanero. 
+La escala varía entre 17°C a 35°C, pero que se distribuyen estacionalmente, por ejemplo, en los picos de lluvia de junio y julio, la temperatura máxima de mantiene discreta en promedio a 25°C, sin embargo, el gradiente sufre un significativo aumento para la franja de diciembre a marzo, donde más del 70% del territorio alcanza temperaturas pico de hasta 35°C.
+
+Comparativamente se muestra las diferencias de temperatura respecto a los escenarios futuros para el año 2080, el final de la década de análisis. En ella RCP 4.5 registra una escala de variación de la temperatura máxima variante entre 1.5 a 3.7°C y alarmante para el caso del RCP 8.5 con variaciones entre 4 a 6°C.
+Un escenario supremamente caliente para dar por expectativa una adaptación de las producciones agrícolas y más aún la apuesta ecológica a la que esta destinado el Municipio por un turismo sostenible.
+
+## Índice estándarizado de precipitación (SPEI) 
+
+Este cálculo del SPEI incluyó también el análisis de la Evapotranspiración Potencial, esto a partir del método de Hargreaves, para el cálculo de estas variables se hizo uso principalmente de la librería `SPEI`. Luego el balance se calculó a partir de la diferencia entre la precipitación y la evapotranspiración. 
+Este índice es muy usado en la ciencia para detectar períodos de tiempo anormalmente secos, que estacionalmente perduren lo suficiente para que exista un desequilibrio en la relación de la evapotranspiración normal o estrés hídrico que pueda sufrir una planta, ya sea de uso agrícola o de presencia endémica. 
+Este se deriva de variables climáticas, en especial de la precipitación, respecto a las condiciones normales y el valor adimensional indica la severidad de la sequía. El período de estudio se efectuó para 33 años de datos correspondientes entre 1983 a 2016. 
+
+Representando la desviación estándar de cada observación mensual alejada respecto a su histórico (valor 0), los valores negativos indican déficit y valores positivos excedentes. Para este caso, se efectuó el análisis SPI 3, analizando la precipitación acumulada trimestralmente, identificando la frecuencia, intensidad y duración de manera más sencilla según la estacionalidad de Monterrey.
+
+En la siguiente figura se ilustra el comportamiento mes a mes para el balance hídrico.
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/maps/climate/spei/bal_map.png' width='1000px' alt=''>
+    <figcaption>Fig - Balance hídrico a nivel mensual en Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+El balance hídrico multi-promedio para los 33 años muestra para la región hay una ocurrencia de déficit hídrico que oscila entre 0 a -100 mm mes-1 durante los meses de diciembre a marzo. El mes con mayor déficit hídrico se registra para el mes de enero. Este déficit en el histórico de precipitación se registra homogéneamente dentro del gradiente geográfico, es decir, independiente de la altitud, estacionalmente existe en estos períodos un estrés hídrico. 
+En contraste, los meses de mayo a julio representan una precipitación pico que puede alcanzar hasta los 500 mm mes-1, picos que están diferenciados esta vez espacialmente, es decir, en mayor proporción en la región central y Norte.
+
+
+En la siguiente figura se ilustra el SPEI con brecha de tres meses, esto para la temporalidad desde 1983 hasta el año 2016. 
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/spei_3.png' width='1000px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación con brecha de 3 meses en Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+De acuerdo a los resultados, es posible establecer no solo los momentos en que se producen sequía sino picos históricos de precipitación. Estos fenómenos que se presentan de manera regular debido a dos situaciones meteorológicas que influyen en el clima de esta región. Ligeramente los fenómenos ENSO de la Niña ‘intensas lluvias’ y el Niño ‘intensa sequía’ y, por otra parte, las dinámicas que influyen desde la selva amazónica, quién es determinante y regula la humedad que puede haber a lo largo del año en la Orinoquia Colombiana.
+
+Pero también se evidencian momentos de La Niña, sin embargo, con picos de menor intensidad que el presentado para la sequía. En la serie de tiempo se observa que el período más lluvioso respecto al histórico trimestral sucede en los años 2004 y 2008.
+
+Explicado lo anterior, para la serie de tiempo analizada, se presentan años de sequía con repercusiones agrícolas durante los años 1985, 1989, 1992, 2001, 2007, 2011, 2013, 2014 y 2015 siendo este último año el único momento dentro de la serie que presenta una intensidad tal que tiene valores inferiores a SPEI -2, siendo una sequía ecológica, es decir, donde la vegetación endémica o adaptada a las condiciones geográficas se pudo ver gravemente afectada. 
+
+En la siguiente figura se ilustra el comportamiento del SPEI para el año 2015; se visualiza en colores las zonas con un valor menor a -1, es decir, zonas con sequía. 
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2015.png' width='1000px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2015</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2016.png' width='1000px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2015</figcaption>
+  </center>
+<figure>
+<br>
+
+El índice SPEI también es usado para determinar geográficamente las zonas que pudieron verse con mayor afectación durante los momentos climáticos más intensos, en este caso, el más extremo para el período de estudio en la región, que sucede en el año 2015. 
+El fenómeno de Niño inicia para el mes de mayo y se suaviza por las lluvias que ocurren entre el mes de junio y noviembre. 
+Sin embargo, por ser un fenómeno que puede permanecer por varios meses en el país, lo que se advierte es que para los meses en que inicia el tiempo seco en condiciones normales en la región, el fenómeno, aunque saldría alcanzo a afectar fuertemente los meses De diciembre del año 2015 y los meses de enero a marzo del año 2016. 
+La incidencia del efecto de salida del Niño y las condiciones topográficas incidió para que el fenómeno estuviera presente en la zona centro y norte del Municipio, dejando un espacio de no repercusión en las zonas más bajas de Monterrey. Sin embargo, el hecho que se ubique geográficamente la situación de sequía ecológica en la parte Norte repercute en todo el municipio, debido a que es la zona de recarga hídrica de las cuencas de los ríos presentes en el municipio.
+
+## Erosión
+
+En la siguiente figura se ilustra el tipo de erosión y la cantidad de hectáreas representadas en el municipio de Monterrey.
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/erosion/erosion_monterrey.png' width='600px' alt=''>
+    <figcaption>Fig - Tipo de erosión y cantidad de área para Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+
+## Clasificación supervisada para detección de análisis de coberturas (Año 2020)
+
+
+## Anexos
+
+Se presentan los climogramas comparativos entre las líneas base y los escenarios RCP 4.5 y 8.5 para el año 2080. Estas representan las temperaturas máximas y mínimas así como las precipitaciones a lo largo del año
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/climograma/climograma_rcp_45_2080s.png' width='600px' alt=''>
+    <figcaption>Fig - Climatograma de precipitación y temperaturas para el RCP 4.5 al periodo 2080s - Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/climograma/climograma_rcp_85_2080s.png' width='600px' alt=''>
+    <figcaption>Fig - Climatograma de precipitación y temperaturas para el RCP 8.5 al periodo 2080s - Monterrey</figcaption>
+  </center>
+<figure>
+<br>
+
+Mapas del SPEI
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1983.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1983</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1984.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1984</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1985.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1985</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1987.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1987</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1988.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1988</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1989.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1989</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1990.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1990</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1991.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1991</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1992.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1992</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1995.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1995</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1997.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1997</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/1998.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1998</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2001.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 1998</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2002.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2002</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2005.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2005</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2007.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2007</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2008.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2008</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2009.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2009</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2010.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2010</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2011.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2011</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2013.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2011</figcaption>
+  </center>
+<figure>
+<br>
+
+<br>
+<figure>
+  <center>
+  <img src= 'G:/Proyectos/politica_ambiental/png/graphs/spei/years/2014.png' width='600px' alt=''>
+    <figcaption>Fig - Índice estándarizado de precipitación para el año 2011</figcaption>
+  </center>
+<figure>
+<br>
+
+
+
+### Sobre autores
+
+[1] Erika Arias
+
+
+[2] Fabio Castro-Llanos 
+Geógrafo de la Universidad del Valle y Máster en Ciencias de la Información Geográfica de la Universidad del Salzburgo en Austria, con alta experiencia en el área de los Sistemas de Información Geográfica, asociado de investigación para la Alianza Bioversity - CIAT, en el área de modelamiento y clima para cultivos tropicales. 
